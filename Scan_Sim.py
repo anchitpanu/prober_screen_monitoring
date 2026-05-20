@@ -54,7 +54,7 @@ def create_writer(video_path, width, height, fps):
 	return writer
 
 
-def run_scan_simulation(image, min_step_pct, max_step_pct, delay_ms=60, seed=None, video_path=None, display_scale=4, cluster_max=3, start_pct=30.0):
+def run_scan_simulation(image, min_step_pct, max_step_pct, delay_ms=60, seed=None, video_path=None, display_scale=4, cluster_max=3, start_pct=30.0, output_path=None):
 	if seed is not None:
 		random.seed(seed)
 		np.random.seed(seed)
@@ -224,6 +224,8 @@ def run_scan_simulation(image, min_step_pct, max_step_pct, delay_ms=60, seed=Non
 				writer.write(final)
 			cv.waitKey(0)
 	finally:
+		if output_path:
+			cv.imwrite(output_path, canvas)
 		if writer is not None:
 			writer.release()
 		cv.destroyAllWindows()
@@ -267,6 +269,9 @@ def main():
 
 	# Convert image to array exactly like array_convert.py before simulation.
 	image = convert_to_array(args.input, size=args.size)
+	input_dir = os.path.dirname(args.input)
+	input_base = os.path.basename(args.input)
+	output_path = os.path.join(input_dir, f"incomplete_{input_base}")
 
 	run_scan_simulation(
 		image=image,
@@ -278,6 +283,7 @@ def main():
 		display_scale=args.display_scale,
 		cluster_max=args.cluster_max,
 		start_pct=args.start_pct,
+		output_path=output_path,
 	)
 
 
