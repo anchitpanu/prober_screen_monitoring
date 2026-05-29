@@ -4,7 +4,9 @@ import os
 import keyboard
 from time import time
 from windowcapture import WindowCapture
+from waferdetector import WaferDetector
 from notification import WindowNotify
+
 
 
 # Change the working directory to the folder this script is in.
@@ -14,8 +16,8 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # initialize the WindowCapture class
 # wincap = WindowCapture('window name')
-wincap = WindowCapture('[program name]')    # program's name is focused on
-
+wincap = WindowCapture('RealVNC Viewer')    # program's name is focused on
+detector = WaferDetector()
 notify = WindowNotify("Prober Screen")      # topic of notification
 
 notify.started()
@@ -31,13 +33,26 @@ while(True):
     # get an updated image of the program
     screenshot = wincap.get_screenshot()
 
+    wafer_screenshot, wafer_pos = detector.find_wafer(screenshot)
+
+    if wafer_screenshot is not None:
+        # draw box on full screenshot
+        screenshot = detector.draw_wafer_box(screenshot, wafer_pos)
+
+        # show wafer map
+        cv.imshow('Wafer Map', wafer_screenshot)
+    else:
+        print("Wafer not found!")
+
+
     # display the image
     cv.imshow('Computer Vision', screenshot)
 
-    # debug the loop rate
-    print('FPS {}'.format(1 / (time() - loop_time)))
-    loop_time = time()
+    # detector.show_mask(screenshot)
 
+    # debug the loop rate
+    # print('FPS {}'.format(1 / (time() - loop_time)))
+    # loop_time = time()
 
     # # press 'q' with the output window focused to exit.
     # # waits 1 ms every loop to process key presses

@@ -29,9 +29,15 @@ class WindowCapture:
         ctypes.windll.user32.SetProcessDPIAware()
 
         # find the handle for the window we want to capture
-        self.hwnd = win32gui.FindWindow(None, window_name)
+        # self.hwnd = win32gui.FindWindow(None, window_name)
+        self.hwnd = self._find_window_partial(window_name)
+
         if not self.hwnd:
             raise Exception('Window not found: {}'.format(window_name))
+
+        # print actual window name found
+        actual_name = win32gui.GetWindowText(self.hwnd)
+        print(f'Window found: "{actual_name}')
 
         # get the window size
         window_rect = win32gui.GetWindowRect(self.hwnd)
@@ -51,8 +57,32 @@ class WindowCapture:
         self.offset_x = window_rect[0] + self.cropped_x
         self.offset_y = window_rect[1] + self.cropped_y
 
-    def get_screenshot(self):
+    def _find_window_partial(self, partial_name):
+        result = []
 
+        def winEnumHandler(hwnd, ctx):
+            if win32gui.IsWindowVisible(hwnd):
+                window_title = win32gui.GetWindowText(hwnd)
+                 
+                # case insensitive partial match
+                if partial_name.lower() in window_title.lower():
+                    result.append(hwnd)
+                    print(f'Matched: "{window_title}')
+
+        win32gui.EnumWindows(winEnumHandler, None)
+
+        if not result:
+            return None
+        
+        # If multiple windows found, use first one
+        if len(result) > 1:
+            print(f'Warning: {len(result)} windows found, using first one')
+            for i, hwnd in enumerate(result):
+                print(f' {i+1}. "{win32gui.GetWindowText(hwnd)}')
+
+        return result[0]
+
+    def get_screenshot(self):
         # get the window image data
         wDC = win32gui.GetWindowDC(self.hwnd)
         dcObj = win32ui.CreateDCFromHandle(wDC)
@@ -94,6 +124,7 @@ class WindowCapture:
 
         return img
 
+    
     # find the name of the window you're interested in.
     # once you have it, update window_capture()
     # https://stackoverflow.com/questions/55547940/how-to-get-a-list-of-the-name-of-every-open-window
