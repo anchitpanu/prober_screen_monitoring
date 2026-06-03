@@ -1,63 +1,61 @@
 import cv2 as cv
 import numpy as np
 import os
-import keyboard
 from time import time
+
 from windowcapture import WindowCapture
-from waferdetector import WaferDetector
+from circledetector import CircleDetector
 from notification import WindowNotify
 
-
-
-# Change the working directory to the folder this script is in.
-# Doing this because I'll be putting the files from each video in their own folder on GitHub
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-
-# initialize the WindowCapture class
-# wincap = WindowCapture('window name')
-wincap = WindowCapture('RealVNC Viewer')    # program's name is focused on
-detector = WaferDetector()
-notify = WindowNotify("Prober Screen")      # topic of notification
-
+wincap   = WindowCapture('wftb33')
+detector = CircleDetector()
+notify   = WindowNotify("Prober Screen")
 notify.started()
 
+detector.debug = True
 
 loop_time = time()
-while(True):
+while True:
+    try:
+        screenshot = wincap.get_screenshot()
 
-    # if keyboard.is_pressed('esc'):
-    #     notify.stopped()
-    #     break
+        # wafer_screenshot, wafer_pos, circle_info = detector.find_wafer(screenshot)
 
-    # get an updated image of the program
-    screenshot = wincap.get_screenshot()
+        if screenshot is not None:
 
-    wafer_screenshot, wafer_pos = detector.find_wafer(screenshot)
+            # detect biggest circle
+            annotated, cropped, circle_info = detector.process(screenshot)
 
-    if wafer_screenshot is not None:
-        # draw box on full screenshot
-        screenshot = detector.draw_wafer_box(screenshot, wafer_pos)
+            if circle_info is not None:
+                cx, cy, r = circle_info
+                print(f"[CircleDetector] centre = ({cx}, {cy}) radius = {r}px")
 
-        # show wafer map
-        cv.imshow('Wafer Map', wafer_screenshot)
-    else:
-        print("Wafer not found!")
+                # show circle only window
+                if cropped is not None:
+                    cv.imshow('Circle Only', cropped)
 
+            else:
+                print("[CircleDetector] No circle found.")
 
-    # display the image
-    cv.imshow('Computer Vision', screenshot)
+            # cv.imshow('Wafer Map', screenshot)
+            # cv.imshow('Biggest Circle (Wafer)', annotated)
 
-    # detector.show_mask(screenshot)
+        else:
+            print("Wafer not found!")
+        
+        cv.imshow('Computer Vision', screenshot)
 
-    # debug the loop rate
-    # print('FPS {}'.format(1 / (time() - loop_time)))
-    # loop_time = time()
+        fps = 1 / (time() - loop_time)
+        print(f'FPS: {fps:.1f}')
+        loop_time = time()
 
-    # # press 'q' with the output window focused to exit.
-    # # waits 1 ms every loop to process key presses
+    except Exception as e:
+        print(f'Error: {e}')
+        cv.waitKey(500)
+
     key = cv.waitKey(1)
-
     if key == ord('q'):
         cv.destroyAllWindows()
         notify.stopped()
