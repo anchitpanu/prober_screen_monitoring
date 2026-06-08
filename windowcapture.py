@@ -57,6 +57,24 @@ class WindowCapture:
         self.offset_x = window_rect[0] + self.cropped_x
         self.offset_y = window_rect[1] + self.cropped_y
 
+    def _update_window_dimensions(self):
+        """Update window dimensions to handle window resizing"""
+        window_rect = win32gui.GetWindowRect(self.hwnd)
+        self.w = window_rect[2] - window_rect[0]
+        self.h = window_rect[3] - window_rect[1]
+
+        # account for the window border and titlebar and cut them off
+        border_pixels = 8
+        titlebar_pixels = 30
+        self.w = self.w - (border_pixels * 2)
+        self.h = self.h - titlebar_pixels - border_pixels
+        self.cropped_x = border_pixels
+        self.cropped_y = titlebar_pixels
+
+        # update the cropped coordinates offset
+        self.offset_x = window_rect[0] + self.cropped_x
+        self.offset_y = window_rect[1] + self.cropped_y
+
     def _find_window_partial(self, partial_name):
         result = []
 
@@ -83,6 +101,9 @@ class WindowCapture:
         return result[0]
 
     def get_screenshot(self):
+        # update window dimensions to handle resizing
+        self._update_window_dimensions()
+        
         # get the window image data
         wDC = win32gui.GetWindowDC(self.hwnd)
         dcObj = win32ui.CreateDCFromHandle(wDC)
