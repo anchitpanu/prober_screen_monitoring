@@ -39,41 +39,20 @@ class WindowCapture:
         actual_name = win32gui.GetWindowText(self.hwnd)
         print(f'Window found: "{actual_name}')
 
-        # get the window size
-        window_rect = win32gui.GetWindowRect(self.hwnd)
-        self.w = window_rect[2] - window_rect[0]
-        self.h = window_rect[3] - window_rect[1]
-
-        # account for the window border and titlebar and cut them off
-        border_pixels = 8
-        titlebar_pixels = 30
-        self.w = self.w - (border_pixels * 2)
-        self.h = self.h - titlebar_pixels - border_pixels
-        self.cropped_x = border_pixels
-        self.cropped_y = titlebar_pixels
-
-        # set the cropped coordinates offset so we can translate screenshot
-        # images into actual screen positions
-        self.offset_x = window_rect[0] + self.cropped_x
-        self.offset_y = window_rect[1] + self.cropped_y
+        # update window dimensions
+        self._update_window_dimensions()
 
     def _update_window_dimensions(self):
         """Update window dimensions to handle window resizing"""
+        # get the client area (actual content area without borders/titlebar)
+        client_rect = win32gui.GetClientRect(self.hwnd)
+        self.w = client_rect[2] - client_rect[0]
+        self.h = client_rect[3] - client_rect[1]
+        
+        # Get window position for coordinate translation
         window_rect = win32gui.GetWindowRect(self.hwnd)
-        self.w = window_rect[2] - window_rect[0]
-        self.h = window_rect[3] - window_rect[1]
-
-        # account for the window border and titlebar and cut them off
-        border_pixels = 8
-        titlebar_pixels = 30
-        self.w = self.w - (border_pixels * 2)
-        self.h = self.h - titlebar_pixels - border_pixels
-        self.cropped_x = border_pixels
-        self.cropped_y = titlebar_pixels
-
-        # update the cropped coordinates offset
-        self.offset_x = window_rect[0] + self.cropped_x
-        self.offset_y = window_rect[1] + self.cropped_y
+        self.offset_x = window_rect[0]
+        self.offset_y = window_rect[1]
 
     def _find_window_partial(self, partial_name):
         result = []
@@ -104,23 +83,26 @@ class WindowCapture:
         # update window dimensions to handle resizing
         self._update_window_dimensions()
         
+        # Get full window rect for capture
+        window_rect = win32gui.GetWindowRect(self.hwnd)
+        full_w = window_rect[2] - window_rect[0]
+        full_h = window_rect[3] - window_rect[1]
+        
         # get the window image data
         wDC = win32gui.GetWindowDC(self.hwnd)
         dcObj = win32ui.CreateDCFromHandle(wDC)
         cDC = dcObj.CreateCompatibleDC()
         dataBitMap = win32ui.CreateBitmap()
-        dataBitMap.CreateCompatibleBitmap(dcObj, self.w, self.h)
+        dataBitMap.CreateCompatibleBitmap(dcObj, full_w, full_h)
         cDC.SelectObject(dataBitMap)
-        # cDC.BitBlt((0, 0), (self.w, self.h), dcObj, (self.cropped_x, self.cropped_y), win32con.SRCCOPY)
-
+        
+        # PrintWindow with flag 2 captures the full window
         result = ctypes.windll.user32.PrintWindow(self.hwnd, cDC.GetSafeHdc(), 2)
 
         # convert the raw data into a format opencv can read
-        #dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
         signedIntsArray = dataBitMap.GetBitmapBits(True)
-        # img = np.fromstring(signedIntsArray, dtype='uint8')
         img = np.frombuffer(signedIntsArray, dtype='uint8')
-        img.shape = (self.h, self.w, 4)
+        img.shape = (full_h, full_w, 4)
 
         # free resources
         dcObj.DeleteDC()
@@ -128,16 +110,20 @@ class WindowCapture:
         win32gui.ReleaseDC(self.hwnd, wDC)
         win32gui.DeleteObject(dataBitMap.GetHandle())
 
-        # drop the alpha channel, or cv.matchTemplate() will throw an error like:
-        #   error: (-215:Assertion failed) (depth == CV_8U || depth == CV_32F) && type == _templ.type() 
-        #   && _img.dims() <= 2 in function 'cv::matchTemplate'
+        # drop the alpha channel
         img = img[...,:3]
 
-        # make image C_CONTIGUOUS to avoid errors that look like:
-        #   File ... in draw_rectangles
-        #   TypeError: an integer is required (got type tuple)
-        # see the discussion here:
-        # https://github.com/opencv/opencv/issues/14866#issuecomment-580207109
+        # Calculate actual borders from the window and client rects
+        client_rect = win32gui.GetClientRect(self.hwnd)
+        client_w = client_rect[2] - client_rect[0]
+        client_h = client_rect[3] - client_rect[1]
+        
+        # Crop to client area (remove borders and titlebar)
+        border_left = (full_w - client_w) // 2
+        border_top = full_h - client_h - border_left
+        img = img[border_top:border_top+client_h, border_left:border_left+client_w]
+
+        # make image C_CONTIGUOUS
         img = np.ascontiguousarray(img)
 
         if result == 0:
